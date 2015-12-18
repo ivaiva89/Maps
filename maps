@@ -1,0 +1,236 @@
+ <script src="http://maps.google.com/maps/api/js?v=3.22" type="text/javascript"></script>
+ <script type="text/javascript">
+ //Sample code written by August Li
+ var icon = new google.maps.MarkerImage(
+                                        "http://maps.google.com/mapfiles/ms/micons/red.png",
+                                        new google.maps.Size(32, 32), new google.maps.Point(0, 0),
+                                        new google.maps.Point(16, 32)
+ );
+ var center = null;
+ var map = null;
+ var currentPopup;
+ var bounds = new google.maps.LatLngBounds();
+ var markers = Array();
+     
+ function addMarker(lng, lat, info, markerURLbyPriority, customer_id) {
+            var pt = new google.maps.LatLng(lng, lat);
+            bounds.extend(pt);
+            var iconUrl;
+            switch(markerURLbyPriority){
+                 case '': iconUrl = "img/NO.png"; break;
+                 case '1': iconUrl = "img/1.png"; break; 
+                 case '2': iconUrl = "img/2.png"; break;                 
+                 case '3': iconUrl = "img/3.png"; break;
+                 case '4': iconUrl = "img/4.png"; break;
+                 case '5': iconUrl = "img/5.png"; break; 
+             }
+
+
+             var marker = new google.maps.Marker({
+                 position: pt,
+                 icon: iconUrl,
+                 map: map,
+                 draggable: true,
+                 id: customer_id
+             });
+
+             var popup = new google.maps.InfoWindow({
+                content: info,
+                maxWidth: 300
+             });
+
+             google.maps.event.addListener(marker, "click", function() {
+                    if (currentPopup != null) {
+                        currentPopup.close();
+                        currentPopup = null;
+                    }
+                    popup.open(map, marker);
+                    currentPopup = popup;
+             });
+
+
+             google.maps.event.addListener(popup, "closeclick", function() {
+                    currentPopup.close();
+                    currentPopup = null;
+             });
+
+             google.maps.event.addListener(marker, "dragend", function(evt) {
+                    if(confirm("ნამდვილად გსურთ მდებარეობის განახლება?")){
+                        var latitude = evt.latLng.lat();
+                        var longitude = evt.latLng.lng();
+                        var id = marker.id;
+                        $.post( "../reg_helper.php?", {  latitude: latitude, 
+                                                        longitude: longitude, 
+                                                        id: id
+                                                     }, function( data ) {
+                            
+                                
+                        });
+                    }
+                    
+             });
+
+             markers.push(marker);
+ }
+     
+ function initMap() {
+             map = new google.maps.Map(document.getElementById("map"), {
+                        zoom: 14,
+                        mapTypeId: google.maps.MapTypeId.ROADMAP,
+                        mapTypeControl: true,
+                        mapTypeControlOptions: {
+                            style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR
+                        },
+                        navigationControl: true,
+                        navigationControlOptions: {
+                            style: google.maps.NavigationControlStyle.SMALL
+                        }
+            });
+ <?
+/*
+ $query = mysql_query("SELECT customer_id, delivery_address, longitude, latitude FROM customer_place");
+ while ($row = mysql_fetch_array($query)){
+ $customer_id=$row['customer_id'];
+ $latitude=$row['latitude'];
+ $longitude=$row['longitude'];
+ $delivery_address=$row['delivery_address'];
+ //echo ("addMarker($latitude, $longitude,'<b>$customer_id</b><br/>$delivery_address');\n");
+    }
+*/
+$query = mysql_query("SELECT ci.`name`, ci.`surname`, ci.`phone`, cc.priority, cc.customer_id FROM `customer_info` as ci
+RIGHT JOIN customer_contact as cc
+ON ci.id=cc.customer_id");
+//$customer_id;
+while ($row = mysql_fetch_array($query)){
+    $marker_str = "addMarker(";
+    $name=$row['name'];
+    $surname=$row['surname'];
+    $phone=$row['phone'];
+    $priority=$row['priority'];
+    $customer_id = $row['customer_id'];
+     $data = get_coords($customer_id);
+     $i =0;
+    foreach($data as $coord){
+            
+           if(!empty($coord)){
+               if($i==2) break;
+               $marker_str.=(double)$coord.",";
+               $i++;
+           }
+    }
+    
+    
+    
+   $marker_str = rtrim($marker_str, ",");
+    $marker_str .= ",'".$name." ".$surname." <br />".$phone."<br /> პრიორიტეტი: ".$priority."','".$priority."',".$customer_id.");";
+    echo $marker_str;
+    print_r($marker_str);
+}
+
+ ?>
+     
+     
+             center = bounds.getCenter();
+             map.fitBounds(bounds);
+ }
+ </script>
+<style type="text/css">
+ body { font: normal 10pt Helvetica, Arial; }
+ #map { width: 600px; height: 600px; border: 0px; padding: 0px; margin-top: 50px; }
+ </style>
+
+<body onload="initMap()" style="margin:0px; border:0px; padding:0px;">
+ <div id="map" style="width: 900px; height: 600px; border: 0px; padding: 0px; margin-top: 50px;"></div>
+    <div id="table"></div>
+<script>
+    
+
+    $(document).ready(function () {
+            
+            // prepare the data
+            var source =
+            {
+                dataType: "json",
+                dataFields: [
+                     { name: 'id', type: 'number' },
+                     { name: 'name', type: 'string' },
+                     { name: 'surname', type: 'string' },
+                     { name: 'phone', type: 'string' },
+                     { name: 'address', type: 'string' },
+                     { name: 'region', type: 'string' },
+                     { name: 'municipality', type: 'string' },
+                     { name: 'place', type: 'string' },
+                     { name: 'delivery_address', type: 'string' },
+                     { name: 'priority', type: 'number' },
+                     //{ name: 'first_contact', type: 'string' },
+                     //{ name: 'next_contact', type: 'string' }
+                ], 
+                url: '?view=maps_helper&type=full',
+            };
+            var dataAdapter = new $.jqx.dataAdapter(source, {
+                loadComplete: function () {
+                    // data is loaded.
+                }
+            });
+            // create jqxDataTable.
+            $("#table").jqxDataTable(
+            {
+                source: dataAdapter,
+                sortable: true,
+                pageable: true,
+                altRows: true,
+                filterable: true,
+                filterMode: 'advanced',
+                width: 1250,
+                columns: [
+                  { text: 'ID', cellsAlign: 'center', align: 'center', dataField: 'id', width: 45 },
+                  { text: 'სახელი', cellsAlign: 'center', align: 'center', dataField: 'name', width: 100 },
+                  { text: 'გვარი', dataField: 'surname', cellsformat: 'd', cellsAlign: 'center', align: 'center', width: 120 },
+                  { text: 'ტელეფონი', dataField: 'phone', cellsformat: 'c2', align: 'center', cellsAlign: 'center', width: 120 },
+                  { text: 'საცხ. მისამართი', cellsAlign: 'address', align: 'center', dataField: 'address' },
+                  { text: 'რეგიონი', cellsAlign: 'address', align: 'center', dataField: 'region' },
+                  { text: 'მუნიციპალიტეტი', cellsAlign: 'address', align: 'center', dataField: 'municipality' },
+                  { text: 'ქალაქი/დაბა/სოფელი', cellsAlign: 'address', align: 'center', dataField: 'place' },
+                  { text: 'მისამართი', cellsAlign: 'address', align: 'center', dataField: 'delivery_address' }, 
+                  { text: 'პრიორიტეტი', cellsAlign: 'address', align: 'center', dataField: 'priority' },
+                  //{ text: 'პირველი კონტაქტი', cellsAlign: 'address', align: 'center', dataField: 'first_contact' },
+                  //{ text: 'შემდეგი კონტაქტი', cellsAlign: 'address', align: 'center', dataField: 'next_contact' }
+                ]
+            });
+        
+        
+            $('#table').on('filter', function (event){
+                var args = event.args;
+                            for(i=0; i<markers.length; i++){
+                                all_id = markers[i].id;
+                                //console.log("all_id: "+all_id);
+                                for(j=0; j<args.owner.renderedRecords.length; j++){
+                                    rendered_id = args.owner.renderedRecords[j].id;
+                                    //console.log("rendered_id: "+rendered_id);
+                                    if(all_id == rendered_id){
+                                        markers[i].setVisible(true);
+                                        //console.log(true);
+                                        break;
+                                    }else{
+                                        markers[i].setVisible(false);
+                                        //console.log(false);
+                                    }
+                                }
+                            }
+
+            });
+        
+        
+        
+            $('#table').on('rowClick', function (event){
+                        var id = args.row.id;
+                        for(i=0; i<markers.length; i++){
+                            if(markers[i].id == id){
+                               map.setZoom(10);
+                                map.panTo( markers[i].position);
+                                break;
+                            }
+                        }
+            });
+        });
+</script>
